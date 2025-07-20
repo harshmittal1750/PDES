@@ -21,6 +21,7 @@ from PIL import Image
 import io
 import platform
 import sys
+from insurance_extractor_mode import InsuranceExtractor
 
 class PDFDataExtractor:
     def __init__(self, root):
@@ -37,6 +38,10 @@ class PDFDataExtractor:
         self.search_terms = []
         self.extracted_data = []
         self.is_processing = False
+        self.insurance_mode = False
+        
+        # Initialize insurance extractor
+        self.insurance_extractor = InsuranceExtractor()
         
         # Setup OCR for bundled environment
         self.setup_ocr_environment()
@@ -158,32 +163,59 @@ class PDFDataExtractor:
         self.context_var = tk.BooleanVar(value=True)
         self.force_ocr_var = tk.BooleanVar()
         self.auto_ocr_var = tk.BooleanVar(value=True)
+        self.insurance_mode_var = tk.BooleanVar()
         
-        ttk.Checkbutton(options_frame, text="Case Sensitive", 
-                       variable=self.case_sensitive_var).grid(row=0, column=0, sticky=tk.W, padx=(0, 15))
-        ttk.Checkbutton(options_frame, text="Whole Words Only", 
-                       variable=self.whole_words_var).grid(row=0, column=1, sticky=tk.W, padx=(0, 15))
-        ttk.Checkbutton(options_frame, text="Regular Expressions", 
-                       variable=self.regex_var).grid(row=0, column=2, sticky=tk.W, padx=(0, 15))
-        ttk.Checkbutton(options_frame, text="Include Context", 
-                       variable=self.context_var).grid(row=0, column=3, sticky=tk.W)
+        # Insurance Mode - prominently placed at the top
+        insurance_frame = ttk.Frame(options_frame)
+        insurance_frame.grid(row=0, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(0, 10))
         
-        # OCR Options (second row)
-        ttk.Checkbutton(options_frame, text="Auto OCR (scanned PDFs)", 
-                       variable=self.auto_ocr_var).grid(row=1, column=0, sticky=tk.W, padx=(0, 15), pady=(5, 0))
-        ttk.Checkbutton(options_frame, text="Force OCR (all PDFs)", 
-                       variable=self.force_ocr_var).grid(row=1, column=1, sticky=tk.W, padx=(0, 15), pady=(5, 0))
+        self.insurance_check = ttk.Checkbutton(insurance_frame, text="🏢 Insurance Mode (Auto-extract all 15 fields)", 
+                                             variable=self.insurance_mode_var, command=self.toggle_insurance_mode)
+        self.insurance_check.grid(row=0, column=0, sticky=tk.W)
+        
+        ttk.Label(insurance_frame, text="→ Extracts: Policy No, Names, Premiums, GST, Vehicle details, etc.", 
+                 font=('Helvetica', 9), foreground='darkgreen').grid(row=1, column=0, sticky=tk.W)
+        
+        # Separator
+        ttk.Separator(options_frame, orient='horizontal').grid(row=1, column=0, columnspan=4, 
+                                                              sticky=(tk.W, tk.E), pady=(5, 10))
+        
+        # Regular search options
+        self.case_check = ttk.Checkbutton(options_frame, text="Case Sensitive", 
+                                         variable=self.case_sensitive_var)
+        self.case_check.grid(row=2, column=0, sticky=tk.W, padx=(0, 15))
+        
+        self.words_check = ttk.Checkbutton(options_frame, text="Whole Words Only", 
+                                          variable=self.whole_words_var)
+        self.words_check.grid(row=2, column=1, sticky=tk.W, padx=(0, 15))
+        
+        self.regex_check = ttk.Checkbutton(options_frame, text="Regular Expressions", 
+                                          variable=self.regex_var)
+        self.regex_check.grid(row=2, column=2, sticky=tk.W, padx=(0, 15))
+        
+        self.context_check = ttk.Checkbutton(options_frame, text="Include Context", 
+                                           variable=self.context_var)
+        self.context_check.grid(row=2, column=3, sticky=tk.W)
+        
+        # OCR Options (third row)
+        self.auto_ocr_check = ttk.Checkbutton(options_frame, text="Auto OCR (scanned PDFs)", 
+                                            variable=self.auto_ocr_var)
+        self.auto_ocr_check.grid(row=3, column=0, sticky=tk.W, padx=(0, 15), pady=(5, 0))
+        
+        self.force_ocr_check = ttk.Checkbutton(options_frame, text="Force OCR (all PDFs)", 
+                                             variable=self.force_ocr_var)
+        self.force_ocr_check.grid(row=3, column=1, sticky=tk.W, padx=(0, 15), pady=(5, 0))
+        
+        # Context length
+        ttk.Label(options_frame, text="Context chars:").grid(row=3, column=2, sticky=tk.W, pady=(5, 0))
+        self.context_length = tk.StringVar(value="100")
+        self.context_entry = ttk.Entry(options_frame, textvariable=self.context_length, width=10)
+        self.context_entry.grid(row=3, column=3, sticky=tk.W, pady=(5, 0))
         
         # OCR Help text
         ocr_help = ttk.Label(options_frame, text="💡 OCR extracts text from image-based/scanned PDFs", 
                             font=('Helvetica', 9))
-        ocr_help.grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=(3, 0))
-        
-        # Context length
-        ttk.Label(options_frame, text="Context chars:").grid(row=1, column=2, sticky=tk.W, pady=(5, 0))
-        self.context_length = tk.StringVar(value="100")
-        ttk.Entry(options_frame, textvariable=self.context_length, width=10).grid(
-            row=1, column=3, sticky=tk.W, pady=(5, 0))
+        ocr_help.grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=(3, 0))
         
         # Process button
         self.process_button = ttk.Button(main_frame, text="Extract Data", 
@@ -244,24 +276,80 @@ class PDFDataExtractor:
         self.extracted_data.clear()
         self.export_button.config(state=tk.DISABLED)
     
+    def toggle_insurance_mode(self):
+        """Toggle between insurance mode and normal search mode"""
+        insurance_mode = self.insurance_mode_var.get()
+        
+        if insurance_mode:
+            # Insurance Mode ON - disable search options and pre-fill search terms
+            self.search_text.config(state=tk.DISABLED)
+            self.case_check.config(state=tk.DISABLED)
+            self.words_check.config(state=tk.DISABLED)
+            self.regex_check.config(state=tk.DISABLED)
+            self.context_check.config(state=tk.DISABLED)
+            self.context_entry.config(state=tk.DISABLED)
+            
+            # Pre-fill with insurance terms
+            self.search_text.config(state=tk.NORMAL)
+            self.search_text.delete(1.0, tk.END)
+            insurance_terms = """Policy no.
+Insured name
+Insurer name
+Engine no.
+Chassis no.
+Cheque no.
+Cheque date
+Bank name
+Net own damage premium amount
+Net liability premium amount
+Total premium amount
+GST amount
+Gross premium paid
+Car model
+Body type"""
+            self.search_text.insert(1.0, insurance_terms)
+            self.search_text.config(state=tk.DISABLED)
+            
+            self.status_label.config(text="Insurance Mode: Auto-extract all 15 fields enabled")
+        else:
+            # Insurance Mode OFF - enable search options
+            self.search_text.config(state=tk.NORMAL)
+            self.case_check.config(state=tk.NORMAL)
+            self.words_check.config(state=tk.NORMAL)
+            self.regex_check.config(state=tk.NORMAL)
+            self.context_check.config(state=tk.NORMAL)
+            self.context_entry.config(state=tk.NORMAL)
+            
+            # Clear search terms
+            self.search_text.delete(1.0, tk.END)
+            
+            self.status_label.config(text="Normal Mode: Enter search terms manually")
+    
     def start_processing(self):
         """Start the PDF processing in a separate thread"""
         if not self.selected_files:
             messagebox.showerror("Error", "Please select PDF files first.")
             return
         
-        search_terms_text = self.search_text.get(1.0, tk.END).strip()
-        if not search_terms_text:
-            messagebox.showerror("Error", "Please enter search terms.")
-            return
+        # Check if insurance mode or normal mode
+        if not self.insurance_mode_var.get():
+            # Normal mode - need search terms
+            search_terms_text = self.search_text.get(1.0, tk.END).strip()
+            if not search_terms_text:
+                messagebox.showerror("Error", "Please enter search terms or enable Insurance Mode.")
+                return
         
-        # Parse search terms
-        self.search_terms = [term.strip() for term in search_terms_text.split('\n') 
-                            if term.strip()]
-        
-        if not self.search_terms:
-            messagebox.showerror("Error", "Please enter at least one search term.")
-            return
+        # Parse search terms (only for normal mode)
+        if not self.insurance_mode_var.get():
+            self.search_terms = [term.strip() for term in search_terms_text.split('\n') 
+                                if term.strip()]
+            
+            if not self.search_terms:
+                messagebox.showerror("Error", "Please enter at least one search term.")
+                return
+        else:
+            # Insurance mode - we'll use the insurance extractor
+            self.search_terms = []  # Not used in insurance mode
         
         # Disable process button and start processing
         self.process_button.config(state=tk.DISABLED)
@@ -353,26 +441,57 @@ class PDFDataExtractor:
                             full_text += f"\n--- Page {page_num} ---\n" + page_texts[page_num]
                         
                         self.logger.info(f"Using OCR results for {filename}")
+                        extraction_method = "OCR"
                     else:
                         self.logger.info(f"Normal text extraction sufficient for {filename}")
+                        extraction_method = "Normal"
+                else:
+                    extraction_method = "Normal"
                 
-                # Search for each term
-                for search_term in self.search_terms:
-                    matches = self.find_matches(full_text, search_term, page_texts)
+                # Handle insurance mode vs normal search mode
+                if self.insurance_mode_var.get():
+                    # Insurance Mode - use specialized extraction
+                    insurance_data = self.insurance_extractor.extract_insurance_data(full_text, filename)
                     
-                    for match in matches:
-                        extraction_method = "OCR" if need_ocr and (self.force_ocr_var.get() or len(''.join(page_texts.values())) > total_chars) else "Normal"
-                        result = {
-                            'filename': filename,
-                            'filepath': file_path,
-                            'search_term': search_term,
-                            'page_number': match.get('page', 'Unknown'),
-                            'match_text': match.get('match', ''),
-                            'context': match.get('context', ''),
-                            'extraction_method': extraction_method,
-                            'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        }
-                        results.append(result)
+                    # Convert insurance data to results format
+                    for field_key, field_info in insurance_data.items():
+                        if field_info['found']:
+                            result = {
+                                'filename': filename,
+                                'search_term': field_info['field_name'],
+                                'page': 'Multiple',  # Insurance fields can be on any page
+                                'context': f"Found: {field_info['value']}",
+                                'match': field_info['value'],
+                                'extraction_method': extraction_method,
+                                'insurance_field': field_key
+                            }
+                            results.append(result)
+                    
+                    # Add summary info
+                    found_count = sum(1 for field in insurance_data.values() if field['found'])
+                    total_fields = len(insurance_data)
+                    
+                    self.root.after(0, lambda f=found_count, t=total_fields, fn=filename: 
+                                   self.results_text.insert(tk.END, 
+                                   f"🏢 {fn}: Found {f}/{t} insurance fields\n"))
+                
+                else:
+                    # Normal Mode - search for each term
+                    for search_term in self.search_terms:
+                        matches = self.find_matches(full_text, search_term, page_texts)
+                        
+                        for match in matches:
+                            result = {
+                                'filename': filename,
+                                'filepath': file_path,
+                                'search_term': search_term,
+                                'page_number': match.get('page', 'Unknown'),
+                                'match_text': match.get('match', ''),
+                                'context': match.get('context', ''),
+                                'extraction_method': extraction_method,
+                                'timestamp': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            }
+                            results.append(result)
         
         except Exception as e:
             self.logger.error(f"Error extracting from {file_path}: {str(e)}")
@@ -550,6 +669,57 @@ class PDFDataExtractor:
         if not filename:
             return
         
+        try:
+            # Check if we're in insurance mode
+            if self.insurance_mode_var.get():
+                self.export_insurance_data(filename)
+            else:
+                self.export_normal_data(filename)
+                
+        except Exception as e:
+            self.logger.error(f"Export error: {str(e)}")
+            messagebox.showerror("Error", f"Failed to export data:\n{str(e)}")
+    
+    def export_insurance_data(self, filename: str):
+        """Export insurance-specific data using the specialized insurance extractor"""
+        # Transform extracted data into insurance format
+        insurance_data = []
+        
+        # Group by filename
+        by_file = {}
+        for result in self.extracted_data:
+            file_key = result['filename']
+            if file_key not in by_file:
+                by_file[file_key] = {
+                    'filename': file_key,
+                    'extraction_method': result.get('extraction_method', 'Normal'),
+                    'insurance_data': {}
+                }
+            
+            # Add insurance field data
+            if 'insurance_field' in result:
+                field_key = result['insurance_field']
+                by_file[file_key]['insurance_data'][field_key] = {
+                    'field_name': result['search_term'],
+                    'value': result.get('match', result.get('context', 'Found')),
+                    'found': True
+                }
+        
+        # Convert to list format expected by insurance extractor
+        for file_data in by_file.values():
+            insurance_data.append(file_data)
+        
+        # Use the insurance extractor's specialized Excel creator
+        success = self.insurance_extractor.create_insurance_excel(insurance_data, filename)
+        
+        if success:
+            messagebox.showinfo("Success", f"Insurance data exported successfully to:\n{filename}")
+            self.status_label.config(text=f"Insurance data exported to Excel: {os.path.basename(filename)}")
+        else:
+            raise Exception("Insurance export failed")
+    
+    def export_normal_data(self, filename: str):
+        """Export normal search data using the standard format"""
         try:
             # Create DataFrame
             df = pd.DataFrame(self.extracted_data)
