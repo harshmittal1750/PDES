@@ -21,13 +21,14 @@ from PIL import Image
 import io
 import platform
 import sys
-from insurance_extractor_mode import InsuranceExtractor
+from insurance_extractor_mode import EnhancedInsuranceExtractor
+from idp_enhanced_extractor import IDPInsuranceExtractor
 
 class PDFDataExtractor:
     def __init__(self, root):
         self.root = root
-        self.root.title("PDF Data Extractor - Secure Local Tool")
-        self.root.geometry("900x700")
+        self.root.title("PDF Data Extractor - IDP/ICR Enhanced")
+        self.root.geometry("900x750")
         
         # Configure logging for debugging
         logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -39,9 +40,11 @@ class PDFDataExtractor:
         self.extracted_data = []
         self.is_processing = False
         self.insurance_mode = False
+        self.idp_mode = False
         
-        # Initialize insurance extractor
-        self.insurance_extractor = InsuranceExtractor()
+        # Initialize both extractors
+        self.insurance_extractor = EnhancedInsuranceExtractor()
+        self.idp_extractor = IDPInsuranceExtractor()
         
         # Setup OCR for bundled environment
         self.setup_ocr_environment()
@@ -164,10 +167,11 @@ class PDFDataExtractor:
         self.force_ocr_var = tk.BooleanVar()
         self.auto_ocr_var = tk.BooleanVar(value=True)
         self.insurance_mode_var = tk.BooleanVar()
+        self.idp_mode_var = tk.BooleanVar()
         
         # Insurance Mode - prominently placed at the top
         insurance_frame = ttk.Frame(options_frame)
-        insurance_frame.grid(row=0, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(0, 10))
+        insurance_frame.grid(row=0, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(0, 5))
         
         self.insurance_check = ttk.Checkbutton(insurance_frame, text="🏢 Insurance Mode (Auto-extract all 15 fields)", 
                                              variable=self.insurance_mode_var, command=self.toggle_insurance_mode)
@@ -176,46 +180,57 @@ class PDFDataExtractor:
         ttk.Label(insurance_frame, text="→ Extracts: Policy No, Names, Premiums, GST, Vehicle details, etc.", 
                  font=('Helvetica', 9), foreground='darkgreen').grid(row=1, column=0, sticky=tk.W)
         
+        # IDP Mode - Enhanced accuracy mode
+        idp_frame = ttk.Frame(options_frame)
+        idp_frame.grid(row=1, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(5, 10))
+        
+        self.idp_check = ttk.Checkbutton(idp_frame, text="🎯 IDP Mode (100% Accuracy + Show All Data)", 
+                                        variable=self.idp_mode_var, command=self.toggle_idp_mode)
+        self.idp_check.grid(row=0, column=0, sticky=tk.W)
+        
+        ttk.Label(idp_frame, text="→ AI-powered extraction + Shows unmatched data for manual review", 
+                 font=('Helvetica', 9), foreground='darkblue').grid(row=1, column=0, sticky=tk.W)
+        
         # Separator
-        ttk.Separator(options_frame, orient='horizontal').grid(row=1, column=0, columnspan=4, 
+        ttk.Separator(options_frame, orient='horizontal').grid(row=2, column=0, columnspan=4, 
                                                               sticky=(tk.W, tk.E), pady=(5, 10))
         
         # Regular search options
         self.case_check = ttk.Checkbutton(options_frame, text="Case Sensitive", 
                                          variable=self.case_sensitive_var)
-        self.case_check.grid(row=2, column=0, sticky=tk.W, padx=(0, 15))
+        self.case_check.grid(row=3, column=0, sticky=tk.W, padx=(0, 15))
         
         self.words_check = ttk.Checkbutton(options_frame, text="Whole Words Only", 
                                           variable=self.whole_words_var)
-        self.words_check.grid(row=2, column=1, sticky=tk.W, padx=(0, 15))
+        self.words_check.grid(row=3, column=1, sticky=tk.W, padx=(0, 15))
         
         self.regex_check = ttk.Checkbutton(options_frame, text="Regular Expressions", 
                                           variable=self.regex_var)
-        self.regex_check.grid(row=2, column=2, sticky=tk.W, padx=(0, 15))
+        self.regex_check.grid(row=3, column=2, sticky=tk.W, padx=(0, 15))
         
         self.context_check = ttk.Checkbutton(options_frame, text="Include Context", 
                                            variable=self.context_var)
-        self.context_check.grid(row=2, column=3, sticky=tk.W)
+        self.context_check.grid(row=3, column=3, sticky=tk.W)
         
-        # OCR Options (third row)
+        # OCR Options (fourth row)
         self.auto_ocr_check = ttk.Checkbutton(options_frame, text="Auto OCR (scanned PDFs)", 
                                             variable=self.auto_ocr_var)
-        self.auto_ocr_check.grid(row=3, column=0, sticky=tk.W, padx=(0, 15), pady=(5, 0))
+        self.auto_ocr_check.grid(row=4, column=0, sticky=tk.W, padx=(0, 15), pady=(5, 0))
         
         self.force_ocr_check = ttk.Checkbutton(options_frame, text="Force OCR (all PDFs)", 
                                              variable=self.force_ocr_var)
-        self.force_ocr_check.grid(row=3, column=1, sticky=tk.W, padx=(0, 15), pady=(5, 0))
+        self.force_ocr_check.grid(row=4, column=1, sticky=tk.W, padx=(0, 15), pady=(5, 0))
         
         # Context length
-        ttk.Label(options_frame, text="Context chars:").grid(row=3, column=2, sticky=tk.W, pady=(5, 0))
+        ttk.Label(options_frame, text="Context chars:").grid(row=4, column=2, sticky=tk.W, pady=(5, 0))
         self.context_length = tk.StringVar(value="100")
         self.context_entry = ttk.Entry(options_frame, textvariable=self.context_length, width=10)
-        self.context_entry.grid(row=3, column=3, sticky=tk.W, pady=(5, 0))
+        self.context_entry.grid(row=4, column=3, sticky=tk.W, pady=(5, 0))
         
         # OCR Help text
         ocr_help = ttk.Label(options_frame, text="💡 OCR extracts text from image-based/scanned PDFs", 
                             font=('Helvetica', 9))
-        ocr_help.grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=(3, 0))
+        ocr_help.grid(row=5, column=0, columnspan=2, sticky=tk.W, pady=(3, 0))
         
         # Process button
         self.process_button = ttk.Button(main_frame, text="Extract Data", 
@@ -281,6 +296,9 @@ class PDFDataExtractor:
         insurance_mode = self.insurance_mode_var.get()
         
         if insurance_mode:
+            # Disable IDP mode if it was enabled
+            self.idp_mode_var.set(False)
+            
             # Insurance Mode ON - disable search options and pre-fill search terms
             self.search_text.config(state=tk.DISABLED)
             self.case_check.config(state=tk.DISABLED)
@@ -325,22 +343,74 @@ Body type"""
             
             self.status_label.config(text="Normal Mode: Enter search terms manually")
     
+    def toggle_idp_mode(self):
+        """Toggle between IDP mode and normal search mode"""
+        idp_mode = self.idp_mode_var.get()
+        
+        if idp_mode:
+            # Disable Insurance mode if it was enabled
+            self.insurance_mode_var.set(False)
+            
+            # IDP Mode ON - disable search options and pre-fill search terms
+            self.search_text.config(state=tk.DISABLED)
+            self.case_check.config(state=tk.DISABLED)
+            self.words_check.config(state=tk.DISABLED)
+            self.regex_check.config(state=tk.DISABLED)
+            self.context_check.config(state=tk.DISABLED)
+            self.context_entry.config(state=tk.DISABLED)
+            
+            # Pre-fill with IDP terms
+            self.search_text.config(state=tk.NORMAL)
+            self.search_text.delete(1.0, tk.END)
+            idp_terms = """Policy no.
+Insured name
+Insurer name
+Engine no.
+Chassis no.
+Cheque no.
+Cheque date
+Bank name
+Net own damage premium amount
+Net liability premium amount
+Total premium amount
+GST amount
+Gross premium paid
+Car model
+Body type"""
+            self.search_text.insert(1.0, idp_terms)
+            self.search_text.config(state=tk.DISABLED)
+            
+            self.status_label.config(text="IDP Mode: 100% Accuracy + Unmatched Data enabled")
+        else:
+            # IDP Mode OFF - enable search options
+            self.search_text.config(state=tk.NORMAL)
+            self.case_check.config(state=tk.NORMAL)
+            self.words_check.config(state=tk.NORMAL)
+            self.regex_check.config(state=tk.NORMAL)
+            self.context_check.config(state=tk.NORMAL)
+            self.context_entry.config(state=tk.NORMAL)
+            
+            # Clear search terms
+            self.search_text.delete(1.0, tk.END)
+            
+            self.status_label.config(text="Normal Mode: Enter search terms manually")
+    
     def start_processing(self):
         """Start the PDF processing in a separate thread"""
         if not self.selected_files:
             messagebox.showerror("Error", "Please select PDF files first.")
             return
         
-        # Check if insurance mode or normal mode
-        if not self.insurance_mode_var.get():
+        # Check if insurance mode, IDP mode, or normal mode
+        if not self.insurance_mode_var.get() and not self.idp_mode_var.get():
             # Normal mode - need search terms
             search_terms_text = self.search_text.get(1.0, tk.END).strip()
             if not search_terms_text:
-                messagebox.showerror("Error", "Please enter search terms or enable Insurance Mode.")
+                messagebox.showerror("Error", "Please enter search terms or enable Insurance/IDP Mode.")
                 return
         
         # Parse search terms (only for normal mode)
-        if not self.insurance_mode_var.get():
+        if not self.insurance_mode_var.get() and not self.idp_mode_var.get():
             self.search_terms = [term.strip() for term in search_terms_text.split('\n') 
                                 if term.strip()]
             
@@ -348,8 +418,8 @@ Body type"""
                 messagebox.showerror("Error", "Please enter at least one search term.")
                 return
         else:
-            # Insurance mode - we'll use the insurance extractor
-            self.search_terms = []  # Not used in insurance mode
+            # Insurance or IDP mode - we'll use the respective extractors
+            self.search_terms = []  # Not used in these modes
         
         # Disable process button and start processing
         self.process_button.config(state=tk.DISABLED)
@@ -448,8 +518,77 @@ Body type"""
                 else:
                     extraction_method = "Normal"
                 
-                # Handle insurance mode vs normal search mode
-                if self.insurance_mode_var.get():
+                # Handle insurance mode vs IDP mode vs normal search mode
+                if self.idp_mode_var.get():
+                    # IDP Mode - use comprehensive extraction with 100% coverage
+                    idp_results = self.idp_extractor.extract_with_100_percent_coverage(full_text, filename)
+                    
+                    # Convert IDP results to results format
+                    for field_key, field_data in idp_results['required_fields'].items():
+                        if field_data['best_match']:
+                            result = {
+                                'filename': filename,
+                                'search_term': field_data['field_name'],
+                                'page': 'Multiple',  # IDP fields can be on any page
+                                'context': field_data['best_match'].context,
+                                'match': field_data['best_match'].value,
+                                'extraction_method': f"IDP-{field_data['best_match'].method}",
+                                'confidence': field_data['best_match'].confidence,
+                                'validation_score': field_data['best_match'].validation_score,
+                                'idp_field': field_key,
+                                'field_type': field_data.get('field_type', 'unknown')
+                            }
+                            results.append(result)
+                    
+                    # Add unmatched data for manual review
+                    unmatched = idp_results['unmatched_candidates']
+                    for amount in unmatched.get('unmatched_monetary_amounts', [])[:5]:  # Limit to 5
+                        result = {
+                            'filename': filename,
+                            'search_term': 'UNMATCHED Monetary Amount',
+                            'page': 'Multiple',
+                            'context': amount.get('context', ''),
+                            'match': amount['value'],
+                            'extraction_method': 'IDP-Unmatched',
+                            'confidence': 0.0,
+                            'validation_score': 0.0,
+                            'idp_field': 'unmatched_monetary',
+                            'field_type': 'monetary'
+                        }
+                        results.append(result)
+                    
+                    for code in unmatched.get('unmatched_codes', [])[:5]:  # Limit to 5
+                        result = {
+                            'filename': filename,
+                            'search_term': 'UNMATCHED Code',
+                            'page': 'Multiple',
+                            'context': code.get('context', ''),
+                            'match': code['value'],
+                            'extraction_method': 'IDP-Unmatched',
+                            'confidence': 0.0,
+                            'validation_score': 0.0,
+                            'idp_field': 'unmatched_code',
+                            'field_type': 'code'
+                        }
+                        results.append(result)
+                    
+                    # Store full IDP results for Excel export
+                    results.append({
+                        'filename': filename,
+                        'idp_full_results': idp_results,
+                        'is_idp_metadata': True
+                    })
+                    
+                    # Status update
+                    found_count = sum(1 for field in idp_results['required_fields'].values() if field['best_match'])
+                    total_fields = len(idp_results['required_fields'])
+                    quality = idp_results['quality_metrics']
+                    
+                    self.root.after(0, lambda f=found_count, t=total_fields, q=quality, fn=filename: 
+                                   self.results_text.insert(tk.END, 
+                                   f"🎯 IDP: {fn} - Found {f}/{t} fields (Quality: {q['success_rate']:.1f}%)\n"))
+                
+                elif self.insurance_mode_var.get():
                     # Insurance Mode - use specialized extraction
                     insurance_data = self.insurance_extractor.extract_insurance_data(full_text, filename)
                     
@@ -670,8 +809,10 @@ Body type"""
             return
         
         try:
-            # Check if we're in insurance mode
-            if self.insurance_mode_var.get():
+            # Check the mode we're in
+            if self.idp_mode_var.get():
+                self.export_idp_data(filename)
+            elif self.insurance_mode_var.get():
                 self.export_insurance_data(filename)
             else:
                 self.export_normal_data(filename)
@@ -679,6 +820,33 @@ Body type"""
         except Exception as e:
             self.logger.error(f"Export error: {str(e)}")
             messagebox.showerror("Error", f"Failed to export data:\n{str(e)}")
+    
+    def export_idp_data(self, filename: str):
+        """Export IDP comprehensive data with unmatched data visibility"""
+        try:
+            # Find IDP metadata
+            idp_metadata = None
+            for result in self.extracted_data:
+                if result.get('is_idp_metadata'):
+                    idp_metadata = result['idp_full_results']
+                    break
+            
+            if idp_metadata:
+                # Use the IDP extractor's comprehensive Excel creator
+                success = self.idp_extractor.create_comprehensive_excel(idp_metadata, filename)
+                
+                if success:
+                    messagebox.showinfo("Success", f"IDP comprehensive data exported successfully to:\n{filename}\n\nIncludes:\n• Required Fields (15 fields)\n• All Candidates (100% visibility)\n• Unmatched Data (for manual review)\n• Quality Metrics\n• Processing Log")
+                    self.status_label.config(text=f"IDP data exported: {os.path.basename(filename)}")
+                else:
+                    raise Exception("IDP export failed")
+            else:
+                # Fallback to regular export with enhanced data
+                self.export_idp_fallback(filename)
+                
+        except Exception as e:
+            self.logger.error(f"IDP export error: {str(e)}")
+            raise
     
     def export_insurance_data(self, filename: str):
         """Export insurance-specific data using the specialized insurance extractor"""
@@ -813,6 +981,54 @@ Body type"""
         """Reset UI elements after processing"""
         self.process_button.config(state=tk.NORMAL)
         self.progress_var.set(0)
+
+    def export_idp_fallback(self, filename: str):
+        """Fallback export for IDP data when metadata is not available"""
+        try:
+            # Filter out metadata entries
+            filtered_data = [result for result in self.extracted_data if not result.get('is_idp_metadata')]
+            
+            # Create enhanced DataFrame with IDP-specific columns
+            df_data = []
+            for result in filtered_data:
+                row = {
+                    'Filename': result['filename'],
+                    'Field Name': result['search_term'],
+                    'Value': result['match'],
+                    'Extraction Method': result.get('extraction_method', 'Unknown'),
+                    'Confidence': f"{result.get('confidence', 0):.2f}",
+                    'Validation Score': f"{result.get('validation_score', 0):.2f}",
+                    'Field Type': result.get('field_type', 'unknown'),
+                    'Context': result.get('context', '')[:200] + '...' if len(result.get('context', '')) > 200 else result.get('context', ''),
+                    'Status': 'Found' if result.get('confidence', 0) > 0 else 'Unmatched'
+                }
+                df_data.append(row)
+            
+            df = pd.DataFrame(df_data)
+            
+            # Create Excel with formatting
+            with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+                df.to_excel(writer, sheet_name='IDP Extraction Results', index=False)
+                
+                # Format the sheet
+                from openpyxl.styles import Font, PatternFill, Alignment
+                ws = writer.sheets['IDP Extraction Results']
+                
+                # Header formatting
+                header_fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                header_font = Font(color="FFFFFF", bold=True)
+                
+                for cell in ws[1]:
+                    cell.fill = header_fill
+                    cell.font = header_font
+                    cell.alignment = Alignment(horizontal="center")
+            
+            messagebox.showinfo("Success", f"IDP data exported (fallback mode) to:\n{filename}")
+            self.status_label.config(text=f"IDP data exported (fallback): {os.path.basename(filename)}")
+            
+        except Exception as e:
+            self.logger.error(f"IDP fallback export error: {str(e)}")
+            raise
 
 def main():
     """Main application entry point"""

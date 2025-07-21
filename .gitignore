@@ -1,2 +1,84 @@
-PDF_Data_Extractor_v2025.07.20_macOS.dmg
-PDF_Data_Extractor_v2025.07.20_macOS.zip
+# Distribution files (too large for Git)
+*.dmg
+*.zip
+*.exe
+*.msi
+*.deb
+*.rpm
+*.tar.gz
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+pdf_extractor_env/
+venv/
+env/
+ENV/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Test files
+test_*.pdf
+sample_*.pdf
+INSURANCE_*.pdf
+*_test.pdf
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.bak
+*.orig
+
+# PyInstaller
+*.spec.bak
+*.manifest
+*.toc
+
+# Coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
